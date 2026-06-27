@@ -1,12 +1,14 @@
 name: Deploy Lambda
 
 on:
+  workflow_dispatch:
+
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
       - 'lambda/**'
 
-# ── Job ───────────────────────────────────────────
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -20,23 +22,20 @@ jobs:
         with:
           python-version: '3.12'
 
-      # ✅ FIXED: use configure-aws-credentials, not aws-cli-action
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:            ${{ secrets.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Package Lambda
         run: |
           cd lambda
           zip -r ../function.zip .
 
-      # ✅ AWS CLI is pre-installed on ubuntu-latest — call it directly
       - name: Deploy to Lambda
         run: |
           aws lambda update-function-code \
             --function-name s3FileProcessor \
-
-            
+            --zip-file fileb://function.zip
