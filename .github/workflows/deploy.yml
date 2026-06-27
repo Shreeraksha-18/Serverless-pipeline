@@ -6,27 +6,35 @@ on:
     paths:
       - 'lambda/**'
 
+# ── Job ───────────────────────────────────────────
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Set up Python
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      # ✅ FIXED: use configure-aws-credentials, not aws-cli-action
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ secrets.AWS_REGION }}
 
       - name: Package Lambda
         run: |
           cd lambda
           zip -r ../function.zip .
 
+      # ✅ AWS CLI is pre-installed on ubuntu-latest — call it directly
       - name: Deploy to Lambda
-        uses: aws-actions/aws-cli-action@v1
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
-        with:
-          args: lambda update-function-code --function-name s3FileProcessor --zip-file fileb://function.zip
+        run: |
+          aws lambda update-function-code \
+            --function-name s3FileProcessor \
