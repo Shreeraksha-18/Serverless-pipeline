@@ -5,103 +5,608 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Serverless Pipeline Dashboard</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-           background: #f5f5f5; color: #1a1a1a; padding: 24px; }
-    h1 { font-size: 20px; font-weight: 600; margin-bottom: 20px; }
-    .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 12px; margin-bottom: 20px; }
-    .metric { background: #fff; border-radius: 10px; padding: 16px; border: 1px solid #e5e5e5; }
-    .metric .label { font-size: 12px; color: #888; margin-bottom: 6px; }
-    .metric .val { font-size: 24px; font-weight: 600; }
-    .card { background: #fff; border-radius: 10px; padding: 20px; border: 1px solid #e5e5e5; margin-bottom: 16px; }
-    .card h2 { font-size: 14px; color: #555; margin-bottom: 14px; text-transform: uppercase; letter-spacing: .04em; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --surface2:  #22263a;
+      --border:    #2e3248;
+      --accent:    #6c63ff;
+      --accent2:   #00d4aa;
+      --text:      #e8eaf0;
+      --muted:     #8b8fa8;
+      --success-bg:#0d2b1f;
+      --success:   #00d4aa;
+      --error-bg:  #2b0d0d;
+      --error:     #ff6b6b;
+      --warn-bg:   #2b2000;
+      --warn:      #ffd166;
+      --radius:    10px;
+      --radius-lg: 16px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 0;
+    }
+
+    /* ── Top nav ── */
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .nav-brand .dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--accent2);
+      box-shadow: 0 0 8px var(--accent2);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .nav-status {
+      font-size: 12px;
+      color: var(--accent2);
+      background: var(--success-bg);
+      border: 1px solid var(--accent2);
+      padding: 4px 12px;
+      border-radius: 20px;
+    }
+
+    /* ── Layout ── */
+    main { padding: 28px 32px; max-width: 1200px; margin: 0 auto; }
+
+    /* ── Metrics ── */
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+    .metric {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      transition: border-color .2s;
+    }
+    .metric:hover { border-color: var(--accent); }
+    .metric .label {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 10px;
+    }
+    .metric .val {
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .metric .sub { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+    /* ── Grid ── */
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+    @media(max-width: 700px) { .grid { grid-template-columns: 1fr; } main { padding: 16px; } }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 22px;
+    }
+    .card-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-title .icon { font-size: 15px; }
+
+    /* ── Upload zone ── */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 36px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      position: relative;
+    }
+    .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: rgba(108,99,255,.06); }
+    .upload-zone .up-icon { font-size: 36px; margin-bottom: 12px; opacity: .5; }
+    .upload-zone p { font-size: 14px; color: var(--text); margin-bottom: 4px; }
+    .upload-zone span { font-size: 12px; color: var(--muted); }
+    #file-input { display: none; }
+
+    /* ── File queue ── */
+    .file-queue { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+    .file-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      font-size: 13px;
+    }
+    .file-row .fname { flex: 1; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .file-row .fsize { color: var(--muted); font-size: 11px; }
+
+    /* ── Progress bar ── */
+    .progress-wrap { width: 100%; height: 3px; background: var(--border); border-radius: 2px; margin-top: 4px; overflow: hidden; }
+    .progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width .3s; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 18px;
+      border-radius: var(--radius);
+      border: none;
+      font-size: 13px;
+      font-family: inherit;
+      cursor: pointer;
+      font-weight: 500;
+      transition: opacity .15s, transform .1s;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { opacity: .88; }
+    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { border-color: var(--accent); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-row { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+
+    /* ── Status toast ── */
+    #toast {
+      position: fixed;
+      bottom: 24px; right: 24px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 18px;
+      font-size: 13px;
+      color: var(--text);
+      max-width: 320px;
+      display: none;
+      z-index: 100;
+      animation: slideup .25s ease;
+    }
+    @keyframes slideup { from{transform:translateY(12px);opacity:0} to{transform:none;opacity:1} }
+
+    /* ── Table ── */
+    .table-wrap { overflow-x: auto; margin-bottom: 20px; }
+    .card.full { grid-column: 1 / -1; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th { text-align: left; padding: 8px 10px; background: #f9f9f9; color: #666; border-bottom: 1px solid #eee; }
-    td { padding: 9px 10px; border-bottom: 1px solid #f0f0f0; }
-    .pill { font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
-    .ok  { background: #e6f7ee; color: #0a7c3e; }
-    .err { background: #fde8e8; color: #b91c1c; }
-    button { padding: 9px 18px; border-radius: 8px; border: none; cursor: pointer;
-             background: #1a1a1a; color: #fff; font-size: 13px; margin-right: 8px; }
-    button.secondary { background: #f0f0f0; color: #1a1a1a; }
-    #status { font-size: 13px; color: #888; margin-top: 10px; }
+    th {
+      text-align: left;
+      padding: 10px 14px;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      border-bottom: 1px solid var(--border);
+      font-weight: 500;
+    }
+    td {
+      padding: 11px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface2); }
+
+    /* ── Pills ── */
+    .pill {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-weight: 600;
+    }
+    .pill-ok  { background: var(--success-bg); color: var(--success); border: 1px solid var(--success); }
+    .pill-err { background: var(--error-bg);   color: var(--error);   border: 1px solid var(--error); }
+    .pill-proc{ background: var(--warn-bg);    color: var(--warn);    border: 1px solid var(--warn); }
+
+    /* ── Activity feed ── */
+    .feed { display: flex; flex-direction: column; gap: 0; }
+    .feed-item {
+      display: flex;
+      gap: 12px;
+      padding: 11px 0;
+      border-bottom: 1px solid var(--border);
+      align-items: flex-start;
+      font-size: 13px;
+    }
+    .feed-item:last-child { border-bottom: none; }
+    .feed-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+    .dot-ok   { background: var(--success); }
+    .dot-err  { background: var(--error); }
+    .dot-info { background: var(--accent); }
+    .feed-text { flex: 1; color: var(--text); line-height: 1.5; }
+    .feed-time { font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+    /* ── Empty state ── */
+    .empty { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+
+
   </style>
 </head>
 <body>
-  <h1>Serverless Pipeline Dashboard</h1>
 
+<nav>
+  <div class="nav-brand">
+    <div class="dot"></div>
+    Serverless Pipeline
+  </div>
+  <div class="nav-status">⚡ All systems live</div>
+</nav>
+
+<main>
+
+
+  <!-- Metrics -->
   <div class="metrics">
-    <div class="metric"><div class="label">Total records</div><div class="val" id="m-total">—</div></div>
-    <div class="metric"><div class="label">Successful</div><div class="val" id="m-ok" style="color:#0a7c3e">—</div></div>
-    <div class="metric"><div class="label">Errors</div><div class="val" id="m-err" style="color:#b91c1c">—</div></div>
-    <div class="metric"><div class="label">Last updated</div><div class="val" id="m-time" style="font-size:14px">—</div></div>
+    <div class="metric">
+      <div class="label">Total files</div>
+      <div class="val" id="m-total" style="color:var(--accent)">—</div>
+      <div class="sub">processed</div>
+    </div>
+    <div class="metric">
+      <div class="label">Successful</div>
+      <div class="val" id="m-ok" style="color:var(--success)">—</div>
+      <div class="sub">saved to DynamoDB</div>
+    </div>
+    <div class="metric">
+      <div class="label">Errors</div>
+      <div class="val" id="m-err" style="color:var(--error)">—</div>
+      <div class="sub">SNS alerted</div>
+    </div>
+    <div class="metric">
+      <div class="label">Last refresh</div>
+      <div class="val" id="m-time" style="font-size:16px;color:var(--muted)">—</div>
+      <div class="sub">auto every 30s</div>
+    </div>
   </div>
 
-  <div class="card">
-    <h2>Actions</h2>
-    <button onclick="loadRecords()">Refresh records</button>
-    <button class="secondary" onclick="triggerProcess()">Trigger test run</button>
-    <div id="status"></div>
+  <div class="grid">
+
+    <!-- Upload card -->
+    <div class="card">
+      <div class="card-title"><span class="icon">☁️</span> Upload to S3</div>
+
+      <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <div class="up-icon">📂</div>
+        <p>Drop files here or click to browse</p>
+        <span>CSV · JSON · TXT · XML · PDF supported</span>
+      </div>
+      <input type="file" id="file-input" multiple accept=".csv,.json,.txt,.xml,.pdf">
+
+      <div class="file-queue" id="file-queue"></div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="upload-btn" onclick="uploadFiles()" disabled>
+          ⬆️ Upload to S3
+        </button>
+        <button class="btn btn-secondary" onclick="clearQueue()">Clear</button>
+      </div>
+    </div>
+
+    <!-- Activity feed -->
+    <div class="card">
+      <div class="card-title"><span class="icon">📡</span> Live activity</div>
+      <div class="feed" id="feed">
+        <div class="empty">No activity yet — upload a file to start</div>
+      </div>
+    </div>
+
   </div>
 
-  <div class="card">
-    <h2>Processed files — DynamoDB</h2>
-    <table>
-      <thead><tr><th>File name</th><th>Type</th><th>Size</th><th>Processed at</th><th>Status</th></tr></thead>
-      <tbody id="records-body"><tr><td colspan="5" style="color:#aaa;padding:20px 10px">Loading...</td></tr></tbody>
-    </table>
+  <!-- Records table -->
+  <div class="card full">
+    <div class="card-title" style="justify-content:space-between">
+      <span><span class="icon">🗄️</span> Processed files — DynamoDB</span>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" onclick="loadRecords()" style="padding:6px 12px;font-size:12px">↻ Refresh</button>
+        <button class="btn btn-secondary" onclick="triggerTest()" style="padding:6px 12px;font-size:12px">⚡ Test run</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>File name</th>
+            <th>Type</th>
+            <th>Size</th>
+            <th>Processed at</th>
+            <th>Source</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="records-body">
+          <tr><td colspan="6" class="empty">Loading records...</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 
-  <script>
-    const API = 'https://yz8eek5eq8.execute-api.ap-south-1.amazonaws.com/prod'; // <-- replace this
+</main>
 
-    async function loadRecords() {
-      document.getElementById('status').textContent = 'Fetching records...';
+<div id="toast"></div>
+
+<script>
+  /* ─────────────────────────────────────────
+     CONFIG — replace these two values
+  ───────────────────────────────────────── */
+  const API_URL       = 'https://yz8eek5eq8.execute-api.ap-south-1.amazonaws.com/prod';   // e.g. https://abc123.execute-api.ap-south-1.amazonaws.com/prod
+  const UPLOAD_BUCKET = 'serverless-pipeline-uploads';              // e.g. serverless-pipeline-uploads-shreeraksha
+  const AWS_REGION    = 'ap-south-1';                           // your bucket region
+
+
+  /* ─────────────────────────────────────────
+     File selection & drag-drop
+  ───────────────────────────────────────── */
+  let selectedFiles = [];
+
+  document.getElementById('file-input').addEventListener('change', function() {
+    selectedFiles = Array.from(this.files);
+    renderQueue();
+  });
+
+  const dropZone = document.getElementById('drop-zone');
+  dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag');
+    selectedFiles = Array.from(e.dataTransfer.files).filter(f =>
+      ['csv','json','txt','xml','pdf'].includes(f.name.split('.').pop().toLowerCase())
+    );
+    renderQueue();
+  });
+
+  function renderQueue() {
+    const q = document.getElementById('file-queue');
+    document.getElementById('upload-btn').disabled = selectedFiles.length === 0;
+    if (!selectedFiles.length) { q.innerHTML = ''; return; }
+    q.innerHTML = selectedFiles.map((f, i) => `
+      <div class="file-row" id="frow-${i}">
+        <span style="font-size:16px">${fileIcon(f.name)}</span>
+        <span class="fname">${f.name}</span>
+        <span class="fsize">${formatSize(f.size)}</span>
+        <span class="pill pill-proc" id="fpill-${i}">queued</span>
+      </div>
+      <div class="progress-wrap"><div class="progress-fill" id="fprog-${i}" style="width:0%"></div></div>
+    `).join('');
+  }
+
+  function fileIcon(name) {
+    const ext = name.split('.').pop().toLowerCase();
+    return { csv:'📊', json:'📋', txt:'📄', xml:'📰', pdf:'📕' }[ext] || '📁';
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+    return (bytes/(1024*1024)).toFixed(1) + ' MB';
+  }
+
+  function clearQueue() {
+    selectedFiles = [];
+    document.getElementById('file-queue').innerHTML = '';
+    document.getElementById('file-input').value = '';
+    document.getElementById('upload-btn').disabled = true;
+  }
+
+  /* ─────────────────────────────────────────
+     Upload files to S3 via presigned URL
+     Flow: browser → API Gateway → Lambda
+           → returns presigned URL
+           → browser uploads directly to S3
+  ───────────────────────────────────────── */
+  async function uploadFiles() {
+    if (!selectedFiles.length) return;
+    document.getElementById('upload-btn').disabled = true;
+
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
+      const pill = document.getElementById(`fpill-${i}`);
+      const prog = document.getElementById(`fprog-${i}`);
+
+      const contentType = file.type || 'application/octet-stream';
+
       try {
-        const res   = await fetch(`${API}/records`);
-        const items = await res.json();
-        const body  = document.getElementById('records-body');
+        pill.textContent = 'getting URL...';
+        pill.className   = 'pill pill-proc';
+        prog.style.width = '20%';
 
-        if (!items.length) {
-          body.innerHTML = '<tr><td colspan="5" style="color:#aaa;padding:20px 10px">No records yet. Upload a file to S3 to start.</td></tr>';
-        } else {
-          body.innerHTML = items.map(item => `
-            <tr>
-              <td>${item.fileName}</td>
-              <td>${item.fileType || '—'}</td>
-              <td>${item.fileSize ? (item.fileSize/1024).toFixed(1)+' KB' : '—'}</td>
-              <td>${new Date(item.processedAt).toLocaleString()}</td>
-              <td><span class="pill ${item.status==='SUCCESS'?'ok':'err'}">${item.status}</span></td>
-            </tr>`).join('');
+        // Step 1: ask Lambda for a presigned S3 URL
+        let res;
+        try {
+          res = await fetch(`${API_URL}/presign`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({
+              fileName: file.name,
+              fileType: contentType,
+              fileSize: file.size,
+              bucket:   UPLOAD_BUCKET
+            })
+          });
+        } catch (networkErr) {
+          throw new Error(networkErr.message || 'Could not reach API Gateway endpoint');
         }
 
-        document.getElementById('m-total').textContent = items.length;
-        document.getElementById('m-ok').textContent   = items.filter(i=>i.status==='SUCCESS').length;
-        document.getElementById('m-err').textContent  = items.filter(i=>i.status!=='SUCCESS').length;
-        document.getElementById('m-time').textContent = new Date().toLocaleTimeString();
-        document.getElementById('status').textContent = 'Updated.';
-      } catch(e) {
-        document.getElementById('status').textContent = 'Error: ' + e.message;
+        const presignData = await res.json();
+        if (!res.ok) {
+          throw new Error(presignData.error || `Presign failed: ${res.status}`);
+        }
+        if (presignData.error) {
+          throw new Error(presignData.error);
+        }
+        const { uploadUrl } = presignData;
+        if (!uploadUrl) throw new Error('No upload URL returned from API');
+        prog.style.width = '50%';
+
+        // Step 2: upload directly to S3 using the presigned URL
+        pill.textContent = 'uploading...';
+        let s3Res;
+        try {
+          s3Res = await fetch(uploadUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': contentType },
+            body: file
+          });
+        } catch (networkErr) {
+          throw new Error('S3 upload blocked — check bucket CORS or try CloudFront URL');
+        }
+
+        if (!s3Res.ok) throw new Error(`S3 upload failed: ${s3Res.status}`);
+        prog.style.width  = '100%';
+        prog.style.background = 'var(--success)';
+        pill.textContent  = 'uploaded ✓';
+        pill.className    = 'pill pill-ok';
+
+        addFeedItem('ok', `<strong>${file.name}</strong> uploaded → Lambda processing → DynamoDB`);
+
+      } catch (err) {
+        pill.textContent = 'failed ✗';
+        pill.className   = 'pill pill-err';
+        prog.style.background = 'var(--error)';
+        addFeedItem('err', `<strong>${file.name}</strong> upload failed — ${err.message}`);
+        console.error(err);
       }
     }
 
-    async function triggerProcess() {
-      document.getElementById('status').textContent = 'Triggering pipeline...';
-      try {
-        const res  = await fetch(`${API}/process`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileName: `test-${Date.now()}.csv`, fileSize: 2048 })
-        });
-        const data = await res.json();
-        document.getElementById('status').textContent = 'Done! fileId: ' + data.fileId;
-        await loadRecords();
-      } catch(e) {
-        document.getElementById('status').textContent = 'Error: ' + e.message;
-      }
-    }
+    document.getElementById('upload-btn').disabled = selectedFiles.length === 0;
+    showToast('Upload complete! Refreshing records in 3s...');
+    setTimeout(loadRecords, 3000);
+  }
 
-    loadRecords();
-  </script>
+  /* ─────────────────────────────────────────
+     Load records from DynamoDB via API GW
+  ───────────────────────────────────────── */
+  async function loadRecords() {
+    try {
+      const res   = await fetch(`${API_URL}/records`);
+      const items = await res.json();
+      const body  = document.getElementById('records-body');
+
+      if (!Array.isArray(items) || !items.length) {
+        body.innerHTML = '<tr><td colspan="6" class="empty">No records yet — upload a file to S3 to begin</td></tr>';
+        updateMetrics([], []);
+        return;
+      }
+
+      const sorted = items.sort((a,b) => new Date(b.processedAt) - new Date(a.processedAt));
+      body.innerHTML = sorted.map(item => `
+        <tr>
+          <td style="font-weight:500">${fileIcon(item.fileName)} ${item.fileName}</td>
+          <td style="color:var(--muted)">.${item.fileType || '—'}</td>
+          <td style="color:var(--muted)">${item.fileSize ? formatSize(parseInt(item.fileSize)) : '—'}</td>
+          <td style="color:var(--muted)">${new Date(item.processedAt).toLocaleString()}</td>
+          <td style="color:var(--muted)">${item.bucket || '—'}</td>
+          <td><span class="pill ${item.status==='SUCCESS'?'pill-ok':'pill-err'}">${item.status}</span></td>
+        </tr>`).join('');
+
+      updateMetrics(items, sorted);
+      document.getElementById('m-time').textContent = new Date().toLocaleTimeString();
+
+    } catch(e) {
+      showToast('Could not load records — check API URL config');
+    }
+  }
+
+  function updateMetrics(items) {
+    document.getElementById('m-total').textContent = items.length;
+    document.getElementById('m-ok').textContent    = items.filter(i=>i.status==='SUCCESS').length;
+    document.getElementById('m-err').textContent   = items.filter(i=>i.status!=='SUCCESS').length;
+  }
+
+  /* ─────────────────────────────────────────
+     Trigger a manual test run via API
+  ───────────────────────────────────────── */
+  async function triggerTest() {
+    showToast('Triggering test run...');
+    try {
+      const res  = await fetch(`${API_URL}/process`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: `test-run-${Date.now()}.csv`, fileSize: 1024 })
+      });
+      const data = await res.json();
+      addFeedItem('ok', `Test run triggered — fileId: <code>${data.fileId}</code>`);
+      showToast('Test record created!');
+      setTimeout(loadRecords, 1500);
+    } catch(e) {
+      showToast('Test run failed — check API URL');
+    }
+  }
+
+  /* ─────────────────────────────────────────
+     Activity feed
+  ───────────────────────────────────────── */
+  function addFeedItem(type, text) {
+    const feed = document.getElementById('feed');
+    const empty = feed.querySelector('.empty');
+    if (empty) empty.remove();
+
+    const div = document.createElement('div');
+    div.className = 'feed-item';
+    div.innerHTML = `
+      <div class="feed-dot dot-${type}"></div>
+      <div class="feed-text">${text}</div>
+      <div class="feed-time">${new Date().toLocaleTimeString()}</div>`;
+    feed.prepend(div);
+
+    // keep max 10 items
+    const items = feed.querySelectorAll('.feed-item');
+    if (items.length > 10) items[items.length-1].remove();
+  }
+
+  /* ─────────────────────────────────────────
+     Toast notification
+  ───────────────────────────────────────── */
+  let toastTimer;
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.display = 'block';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.style.display = 'none', 3500);
+  }
+
+  /* ─────────────────────────────────────────
+     Auto-refresh every 30 seconds
+  ───────────────────────────────────────── */
+  loadRecords();
+  setInterval(loadRecords, 30000);
+</script>
 </body>
 </html>
