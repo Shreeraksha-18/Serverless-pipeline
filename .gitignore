@@ -1,0 +1,21 @@
+# Build & deployment artifacts
+*.zip
+function.zip
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+
+# Environment / Credentials
+.env
+*.pem
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
